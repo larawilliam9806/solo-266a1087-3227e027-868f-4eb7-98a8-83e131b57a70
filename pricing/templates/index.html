@@ -6,6 +6,8 @@
   <p class="muted">
     上传单页 OCR CSV（框号、文字、矩形坐标），对照文字框划定行线与
     品名 / 规格 / 批发价 三列，核对跨格框后导出三列 CSV。
+    把核完的任务挂到某一期的指定页码，再在
+    <a href="{{ url_for('compare') }}">两期对照</a>中并排查看报价。
   </p>
   <form class="upload" method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data">
     <input type="file" name="file" accept=".csv,text/csv,text/plain" required>
@@ -23,12 +25,89 @@
   </details>
 </section>
 
+<section class="card" id="issues">
+  <div class="panel-head">
+    <h2>期号</h2>
+    <span class="muted">一个期号登记总页数；每个页码只能挂一个任务，每个任务只挂一处。</span>
+  </div>
+  <form class="inline-form" method="post" action="{{ url_for('issue_create') }}">
+    <label>期号
+      <input name="issue_no" placeholder="例如 1998-03-12" maxlength="80" required>
+    </label>
+    <label>价目表总页数
+      <input name="total_pages" type="number" min="1" step="1" value="1" required>
+    </label>
+    <button type="submit">登记期号</button>
+  </form>
+  {% if issues %}
+  <table class="issues">
+    <thead>
+      <tr><th>期号</th><th>总页数</th><th>已挂页</th><th>状态</th><th>总页数修正</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for issue in issues %}
+      <tr>
+        <td><a href="{{ url_for('issue_view', issue_id=issue.id) }}">{{ issue.issue_no }}</a></td>
+        <td>{{ issue.total_pages }}</td>
+        <td>{{ issue.mounted }}</td>
+        <td>
+          {% if issue.mounted == 0 %}
+            <span class="pill">未挂页</span>
+          {% elif issue.out_of_range %}
+            <span class="pill bad">有 {{ issue.out_of_range }} 页超出总页数</span>
+          {% else %}
+            <span class="pill warn">已挂 {{ issue.mounted }} / {{ issue.total_pages }} 页</span>
+          {% endif %}
+        </td>
+        <td>
+          <form class="inline-form" method="post"
+                action="{{ url_for('issue_update', issue_id=issue.id) }}">
+            <input name="total_pages" type="number" min="1" step="1"
+                   value="{{ issue.total_pages }}" style="width:6em" required>
+            <button type="submit" class="small">保存</button>
+          </form>
+        </td>
+        <td class="right">
+          <a class="button" href="{{ url_for('issue_view', issue_id=issue.id) }}">管理页码</a>
+          <form method="post" action="{{ url_for('issue_delete', issue_id=issue.id) }}"
+                onsubmit="return confirm('删除期号 {{ issue.issue_no }}？其上任务保留但会变为未挂页。');">
+            <button class="danger" type="submit">删除</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">还没有登记期号。请先在上方登记期号和价目表总页数。</p>
+  {% endif %}
+</section>
+
 <section class="card">
-  <h2>任务</h2>
+  <div class="panel-head">
+    <h2>任务</h2>
+    <form class="inline-form" method="get" action="{{ url_for('compare') }}">
+      <label>两期对照
+        <select name="a" required>
+          <option value="">选择第一期</option>
+          {% for issue in issues %}
+          <option value="{{ issue.id }}">{{ issue.issue_no }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <select name="b" required>
+        <option value="">选择第二期</option>
+        {% for issue in issues %}
+        <option value="{{ issue.id }}">{{ issue.issue_no }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" {% if issues|length < 2 %}disabled{% endif %}>对照所选两期</button>
+    </form>
+  </div>
   {% if jobs %}
   <table class="jobs">
     <thead>
-      <tr><th>#</th><th>文件</th><th>文字框</th><th>格线</th><th>创建时间</th><th></th></tr>
+      <tr><th>#</th><th>文件</th><th>文字框</th><th>格线</th><th>挂页</th><th>创建时间</th><th></th></tr>
     </thead>
     <tbody>
       {% for job in jobs %}
@@ -37,6 +116,14 @@
         <td><a href="{{ url_for('job_view', job_id=job.id) }}">{{ job.filename }}</a></td>
         <td>{{ job.box_count }}</td>
         <td>{{ job.line_count }}</td>
+        <td>
+          {% if job.issue_no %}
+            <a href="{{ url_for('issue_view', issue_id=job.issue_id) }}">{{ job.issue_no }}</a>
+            · 第 {{ job.page_no }} 页
+          {% else %}
+            <span class="muted">未挂页</span>
+          {% endif %}
+        </td>
         <td class="muted">{{ job.created_at }}</td>
         <td class="right">
           <a class="button" href="{{ url_for('job_view', job_id=job.id) }}">打开</a>

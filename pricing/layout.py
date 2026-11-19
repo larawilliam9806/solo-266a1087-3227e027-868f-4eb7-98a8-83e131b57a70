@@ -454,3 +454,164 @@ def make_decision(grid, item, kind, target_key=None):
         "overlap_cells": overlap_keys,
     }
 
+
+# ---------------------------------------------------------------------------
+# Cross-issue comparison
+# ---------------------------------------------------------------------------
+
+MISSING = "missing"
+PENDING = "pending"
+FOUND = "found"
+
+COMPARE_LABELS = {
+    MISSING: "未刊登",
+    PENDING: "待核",
+    FOUND: "已刊登",
+}
+
+
+def normalize_text(value):
+    return " ".join(str(value or "").split())
+
+
+def product_key(name, spec):
+    """Grouping key: the product name and spec, whitespace collapsed."""
+    return (normalize_text(name), normalize_text(spec))
+
+
+def issue_page_coverage(pages, total_pages):
+    """Which pages of an issue are present and fully resolved.
+
+    ``pages`` is the list of mounted tasks with their extract status.  A page
+    counts as complete only when its job meets the existing export condition:
+    valid grid, at least one text box, and no pending/stale box.  A page with
+    no task is a missing page.
+    """
+    mounted = {}
+    for page in pages:
+        number = int(page["page_no"])
+        complete = (bool(page.get("grid_valid"))
+                    and int(page.get("pending") or 0) == 0
+                    and int(page.get("box_count", 1)) > 0)
+        mounted[number] = {
+            "page_no": number,
+            "job_id": page.get("job_id"),
+            "filename": page.get("filename", ""),
+            "complete": complete,
+            "invalid": page.get("invalid") or "",
+            "pending": int(page.get("pending") or 0),
+        }
+    missing = [number for number in range(1, int(total_pages) + 1)
+               if number not in mounted]
+    unfinished = [entry for entry in mounted.values() if not entry["complete"]]
+    unfinished.sort(key=lambda entry: entry["page_no"])
+    return {
+        "total_pages": int(total_pages),
+        "pages": mounted,
+        "missing": missing,
+        "unfinished": unfinished,
+        # "complete" is the "现有导出条件": every page present, every page
+        # exportable (valid grid, at least one box, nothing pending).
+        "complete": int(total_pages) > 0 and not missing and not unfinished,
+    }
+
+
+def _coverage_reason(coverage):
+    """Human list of the pages that stop an issue from being complete."""
+    missing = list(coverage["missing"])
+    unfinished = [
+        {"page_no": page["page_no"], "pending": page["pending"],
+         "invalid": page["invalid"], "filename": page["filename"]}
+        for page in coverage["unfinished"]
+    ]
+    return missing, unfinished
+
+
+def compare_issues(issues):
+    """Build the side-by-side comparison for the selected issues.
+
+    ``issues`` is an ordered list of coverage structures (see
+    ``issue_page_coverage``), each extended with ``issue_id``, ``issue_no`` and
+    ``rows`` (every exported row annotated with page_no and row_no).
+
+    Grouping is by (品名, 规格).  All prices of every issue are listed, each
+    tagged with the page and the row inside that page's table.  An issue that
+    does not carry a product is only labelled 未刊登 when that issue is
+    complete — every page is present and every page already meets the export
+    condition.  Otherwise the row is 待核 and lists the missing pages and the
+    pages that are not finished.
+
+    The comparison is symmetric: whichever issue lacks the product is judged
+    by that issue's own completeness, never by the other issue's.
+    """
+    order = []
+    grouped = {}
+    for issue in issues:
+        for row in issue["rows"]:
+            key = product_key(row["name"], row["spec"])
+            if key not in grouped:
+                grouped[key] = {
+                    "name": row["name"],
+                    "spec": row["spec"],
+                    "cells": {issue["issue_id"]: [] for issue in issues},
+                }
+                order.append(key)
+            grouped[key]["cells"][issue["issue_id"]].append(row)
+
+    result = []
+    for key in order:
+        group = grouped[key]
+        item = {
+            "name": group["name"],
+            "spec": group["spec"],
+            "columns": [],
+        }
+        for issue in issues:
+            rows = group["cells"].get(issue["issue_id"], [])
+            prices = _merge_prices(rows)
+            column = {
+                "issue_id": issue["issue_id"],
+                "issue_no": issue["issue_no"],
+                "prices": prices,
+                "status": FOUND,
+                "status_label": COMPARE_LABELS[FOUND],
+                "missing_pages": [],
+                "unfinished_pages": [],
+            }
+            if not prices:
+                # No price in this issue yet.  Is that because the product is
+                # absent, or because we cannot yet know?
+                if issue["complete"]:
+                    column["status"] = MISSING
+                    column["status_label"] = COMPARE_LABELS[MISSING]
+                else:
+                    column["status"] = PENDING
+                    column["status_label"] = COMPARE_LABELS[PENDING]
+                    (column["missing_pages"],
+                     column["unfinished_pages"]) = _coverage_reason(issue)
+            item["columns"].append(column)
+        result.append(item)
+    return result
+
+
+def _merge_prices(rows):
+    """One entry per distinct price, listing every page:row it came from."""
+    merged = {}
+    order = []
+    for row in rows:
+        price = row["price"]
+        if price not in merged:
+            merged[price] = {"price": price, "sources": []}
+            order.append(price)
+        source = {"page_no": row.get("page_no"), "row_no": row.get("row_no")}
+        if source["page_no"] is not None and source not in merged[price]["sources"]:
+            merged[price]["sources"].append(source)
+    result = []
+    for price in order:
+        sources = merged[price]["sources"]
+        sources.sort(key=lambda entry: (entry["page_no"] or 0, entry["row_no"] or 0))
+        result.append({"price": price, "sources": sources})
+    return result
+
+
+

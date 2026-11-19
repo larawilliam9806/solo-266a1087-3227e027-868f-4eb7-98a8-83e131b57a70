@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}{{ issue.issue_no }} · 期号页 · 旧报纸价目表录入{% endblock %}
+{% block topbar %}
+  <span class="crumb">第 {{ issue.issue_no }} 期 · 共 {{ issue.total_pages }} 页</span>
+  <a class="button" href="{{ url_for('compare') }}?a={{ issue.id }}">参加两期对照</a>
+{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="panel-head">
+    <h2>第 {{ issue.issue_no }} 期 · 页码</h2>
+    <span class="muted">
+      每个页码只挂一个任务，每个任务只挂一处。挂到已有任务的页码＝换页，
+      原任务会退回“未挂页”。
+    </span>
+  </div>
+
+  {% if coverage.missing %}
+  <p class="notice warn">
+    缺页：第 {{ coverage.missing|join('、') }} 页还没有挂任务。
+  </p>
+  {% endif %}
+  {% if coverage.unfinished %}
+  <p class="notice warn">
+    未核完的页：
+    {% for page in coverage.unfinished %}
+      第 {{ page.page_no }} 页
+      {%- if page.invalid %}（{{ page.invalid }}）
+      {%- else %}（还有 {{ page.pending }} 个文字框待核）{% endif %}
+      {%- if not loop.last %}；{% endif %}
+    {% endfor %}
+  </p>
+  {% endif %}
+  {% if coverage.complete %}
+  <p class="notice ok">全部 {{ issue.total_pages }} 页齐全且都达到导出条件，可作为对照基准。</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>已挂页</h2>
+  {% if pages %}
+  <table class="pages">
+    <thead>
+      <tr><th>页码</th><th>任务</th><th>文字框</th><th>状态</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for page in pages %}
+      {% set extract = extracts[page.job_id] %}
+      <tr>
+        <td>第 {{ page.page_no }} 页</td>
+        <td><a href="{{ url_for('job_view', job_id=page.job_id) }}">{{ page.filename }}</a></td>
+        <td>{{ extract.box_count }}</td>
+        <td>
+          {% if not extract.grid_valid %}
+            <span class="pill bad">格线无效</span>
+          {% elif extract.pending %}
+            <span class="pill warn">待核 {{ extract.pending }} 个框</span>
+          {% else %}
+            <span class="pill good">已核完，可导出</span>
+          {% endif %}
+        </td>
+        <td class="right">
+          <a class="button" href="{{ url_for('job_view', job_id=page.job_id) }}">打开任务</a>
+          <form method="post" action="{{ url_for('page_delete', page_id=page.id) }}"
+                onsubmit="return confirm('从第 {{ issue.issue_no }} 期第 {{ page.page_no }} 页撤下该任务？');">
+            <button class="danger" type="submit">撤下</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">这一期还没有挂任何页。</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>挂页 / 补页 / 换页</h2>
+  <form class="inline-form" method="post" action="{{ url_for('issue_place', issue_id=issue.id) }}">
+    <label>任务
+      <select name="job_id" required>
+        <option value="">选择任务</option>
+        {% for job in jobs %}
+        <option value="{{ job.id }}">
+          #{{ job.id }} {{ job.filename }}
+          {%- if job.issue_no %}（当前：{{ job.issue_no }} 第 {{ job.page_no }} 页）{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>页码
+      <input name="page_no" type="number" min="1" max="{{ issue.total_pages }}"
+             step="1" required>
+    </label>
+    <button type="submit" class="primary">挂到该页</button>
+  </form>
+  <p class="muted">
+    可选任意任务：已在别处挂载的任务会被移动过来（换页）；挂到已有任务的页码会
+    替换该页原任务，原任务退回未挂页。挂页或换页失败时保留原结果。
+  </p>
+  <p><a class="button" href="{{ url_for('index') }}">登记新的期号</a></p>
+</section>
+{% endblock %}

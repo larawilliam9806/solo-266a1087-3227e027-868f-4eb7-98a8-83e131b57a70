@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block title %}任务 {{ job.id }} · 旧报纸价目表录入{% endblock %}
 {% block topbar %}
-  <span class="crumb">{{ job.filename }}</span>
+  <span class="crumb">
+    {{ job.filename }}
+    {% if placement %}· {{ placement.issue_no }} 第 {{ placement.page_no }} 页{% endif %}
+  </span>
   <a class="button{% if state.can_export %} primary{% else %} disabled{% endif %}"
      id="download-link"
      {% if state.can_export %}href="{{ url_for('export_csv', job_id=job.id) }}"{% else %}title="没有待核框后才可下载" aria-disabled="true"{% endif %}>下载三列 CSV</a>
@@ -20,6 +23,49 @@
     </form>
   </div>
   <p class="notice bad" id="invalid-message" {% if state.grid_valid %}hidden{% endif %}></p>
+</section>
+
+<section class="card" id="placement-card">
+  <div class="panel-head">
+    <h2>挂页</h2>
+    <span class="muted">每个页码只挂一个任务，每个任务只挂一处。</span>
+  </div>
+  {% if placement %}
+  <p>
+    当前挂在
+    <a href="{{ url_for('issue_view', issue_id=placement.issue_id) }}">{{ placement.issue_no }}</a>
+    第 {{ placement.page_no }} 页。
+  </p>
+  {% else %}
+  <p class="muted">当前未挂页。</p>
+  {% endif %}
+  {% if issues %}
+  <form class="inline-form" method="post" action="{{ url_for('job_place', job_id=job.id) }}">
+    <label>期号
+      <select name="issue_id" required>
+        {% for issue in issues %}
+        <option value="{{ issue.id }}" {% if placement and placement.issue_id == issue.id %}selected{% endif %}>{{ issue.issue_no }}（共 {{ issue.total_pages }} 页）</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>页码
+      <input name="page_no" type="number" min="1" step="1"
+             value="{{ placement.page_no if placement else 1 }}" required>
+    </label>
+    <button type="submit" class="primary">{{ "换页" if placement else "挂到该页" }}</button>
+  </form>
+  <p class="muted">
+    挂到已有任务的页码即换页，原任务退回未挂页；挂页或换页失败时保留原结果。
+  </p>
+  {% else %}
+  <p class="muted">还没有登记期号，请先回到<a href="{{ url_for('index') }}">首页</a>登记。</p>
+  {% endif %}
+  {% if placement %}
+  <form method="post" action="{{ url_for('job_unplace', job_id=job.id) }}"
+        onsubmit="return confirm('从第 {{ placement.page_no }} 页撤下该任务？');">
+    <button class="danger ghost" type="submit">从页码撤下</button>
+  </form>
+  {% endif %}
 </section>
 
 <section class="card">

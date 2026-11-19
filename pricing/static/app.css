@@ -88,7 +88,24 @@ button.danger.ghost { background: transparent; }
 .notice { padding: 10px 12px; border-radius: 8px; font-size: 14px; }
 .notice.warn { background: #fbf0d9; color: #7a5200; }
 .notice.bad { background: #f9e1de; color: #8a2a1c; }
+.notice.ok { background: #e4f0e7; color: #245b3c; }
 .error { color: var(--pending); font-size: 14px; }
+
+.inline-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin: 10px 0; }
+.inline-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.inline-form input, .inline-form select { padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; font: inherit; background: #fff; }
+.inline-form button.small { padding: 5px 10px; font-size: 13px; }
+
+.badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.badge.found { background: #e4f0e7; color: var(--auto); }
+.badge.pending { background: #fbf0d9; color: var(--stale); }
+.badge.missing { background: #efece5; color: #5c554b; }
+.prices { list-style: none; margin: 0; padding: 0; }
+.prices li { padding: 2px 0; }
+.prices strong { font-variant-numeric: tabular-nums; margin-right: 6px; }
+.reason { margin-top: 4px; font-size: 12px; color: #7a5200; }
+.status-missing td, .status-missing { background: #f7f4ee; }
+.compare td { vertical-align: top; }
 
 .statusline { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
 
@@ -96,7 +113,9 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { color: var(--muted); font-weight: 600; }
 .jobs td form { display: inline; }
+.issues td form { display: inline; }
 .preview td { white-space: pre-wrap; }
+.compare-head { margin-bottom: 8px; }
 
 .help summary { cursor: pointer; color: var(--accent); }
 .help pre { background: #f1ede4; padding: 10px 12px; border-radius: 7px; overflow: auto; font-size: 13px; }

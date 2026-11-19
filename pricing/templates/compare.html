@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}两期对照 · 旧报纸价目表录入{% endblock %}
+{% block topbar %}
+  <span class="crumb">按品名和规格并列显示两期已核完页面的报价</span>
+{% endblock %}
+
+{% block content %}
+<section class="card">
+  <h2>选择两期</h2>
+  <form class="inline-form" method="get" action="{{ url_for('compare') }}">
+    <label>第一期
+      <select name="a" required>
+        <option value="">选择期号</option>
+        {% for issue in issues %}
+        <option value="{{ issue.id }}" {% if selected and selected[0] == issue.id %}selected{% endif %}>{{ issue.issue_no }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>第二期
+      <select name="b" required>
+        <option value="">选择期号</option>
+        {% for issue in issues %}
+        <option value="{{ issue.id }}" {% if selected|length > 1 and selected[1] == issue.id %}selected{% endif %}>{{ issue.issue_no }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" {% if issues|length < 2 %}disabled{% endif %}>对照</button>
+  </form>
+  {% if error %}<p class="notice bad">{{ error }}</p>{% endif %}
+  {% if not issues %}<p class="muted">还没有登记期号，请先返回首页登记。</p>{% endif %}
+</section>
+
+{% if report is not none %}
+{% set first = issues|selectattr('id', 'equalto', selected[0])|first %}
+{% set second = issues|selectattr('id', 'equalto', selected[1])|first %}
+
+<section class="card">
+  <div class="panel-head">
+    <h2>对照：{{ first.issue_no }} / {{ second.issue_no }}</h2>
+    <div class="legend">
+      <span><i class="swatch auto"></i>已刊登</span>
+      <span><i class="swatch pending"></i>待核</span>
+      <span><i class="swatch excluded"></i>未刊登</span>
+    </div>
+  </div>
+  <p class="muted">
+    每格列出该期“已核完页面”的全部报价，并标明页码和表内行号。
+    只有一期页码齐全、所有页都达到导出条件时，找不到的商品才标为未刊登；
+    否则标为待核，并列出缺页和未核完的页。
+  </p>
+
+  <table class="compare-head">
+    <thead>
+      <tr>
+        <th>期号</th>
+        <th>总页数</th>
+        <th>状态</th>
+        <th>缺页</th>
+        <th>未核完的页</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for issue in [first, second] %}
+      {% set coverage = coverage_map[issue.id] %}
+      <tr>
+        <td><a href="{{ url_for('issue_view', issue_id=issue.id) }}">{{ issue.issue_no }}</a></td>
+        <td>{{ coverage.total_pages }}</td>
+        <td>
+          {% if coverage.complete %}
+            <span class="pill good">齐全，可作为基准</span>
+          {% else %}
+            <span class="pill warn">不完整</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if coverage.missing %}第 {{ coverage.missing|join('、') }} 页{% else %}—{% endif %}
+        </td>
+        <td>
+          {% if coverage.unfinished %}
+            {% for page in coverage.unfinished %}
+              第 {{ page.page_no }} 页{% if page.invalid %}（{{ page.invalid }}）{% else %}（待核 {{ page.pending }} 框）{% endif %}{% if not loop.last %}；{% endif %}
+            {% endfor %}
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <table class="compare">
+    <thead>
+      <tr>
+        <th>品名</th>
+        <th>规格</th>
+        <th>{{ first.issue_no }}</th>
+        <th>{{ second.issue_no }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in report %}
+      <tr>
+        <td>{{ row.name }}</td>
+        <td>{{ row.spec }}</td>
+        {% for column in row.columns %}
+        <td class="cell status-{{ column.status }}">
+          {% if column.prices %}
+            <ul class="prices">
+              {% for price in column.prices %}
+              <li>
+                <strong>{{ price.price }}</strong>
+                <span class="muted">
+                  {% for source in price.sources %}
+                    第 {{ source.page_no }} 页 · 第 {{ source.row_no }} 行{% if not loop.last %}；{% endif %}
+                  {% endfor %}
+                </span>
+              </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <span class="badge {{ column.status }}">{{ column.status_label }}</span>
+            {% if column.status == 'pending' %}
+              <div class="reason">
+                {% if column.missing_pages %}
+                  <div>缺页：第 {{ column.missing_pages|join('、') }} 页</div>
+                {% endif %}
+                {% if column.unfinished_pages %}
+                  <div>未核完的页：
+                    {% for page in column.unfinished_pages %}
+                      第 {{ page.page_no }} 页{% if page.invalid %}（{{ page.invalid }}）{% else %}（待核 {{ page.pending }} 框）{% endif %}{% if not loop.last %}；{% endif %}
+                    {% endfor %}
+                  </div>
+                {% endif %}
+                {% if not column.missing_pages and not column.unfinished_pages %}
+                  <div>该期没有任何已核完的页面。</div>
+                {% endif %}
+              </div>
+            {% endif %}
+          {% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if not report %}<p class="muted">两期均没有已核完的报价。</p>{% endif %}
+</section>
+{% endif %}
+{% endblock %}
